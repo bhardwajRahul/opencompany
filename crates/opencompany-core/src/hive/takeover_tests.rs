@@ -66,6 +66,7 @@ fn wrapped_with_queue(
     }) as Box<dyn Tool>;
     let queue = crate::hive::takeover::TakeoverQueue::default();
     let loan = TakeoverLoan {
+        episode: EPISODE.into(),
         events: Arc::clone(&log) as Arc<dyn EventLog>,
         company: record(TWO_DESKS).id,
         agent: "engineer".into(),
@@ -73,6 +74,9 @@ fn wrapped_with_queue(
     };
     (TakeOverTool::new(complete, loan, "desk_"), log, seen, queue)
 }
+
+/// The episode the test's seat sits in, and the key its claims carry.
+const EPISODE: &str = "ep-webauthn";
 
 fn args() -> serde_json::Value {
     serde_json::json!({
@@ -279,7 +283,7 @@ async fn a_claim_is_staged_for_the_claimers_own_line() {
     let result = tool.execute(args()).await.expect("the call runs");
     assert!(!result.is_error, "{}", text(&result));
 
-    let staged = queue.drain();
+    let staged = queue.drain(EPISODE);
     assert_eq!(staged.len(), 1, "one claim, for one takeover: {staged:?}");
     assert_eq!(staged[0].seat, "engineer", "the teammate that took it on");
     assert_eq!(
@@ -310,7 +314,48 @@ async fn a_refused_conclusion_stages_no_claim() {
 
     assert!(refused.is_error);
     assert!(
-        queue.drain().is_empty(),
+        queue.drain(EPISODE).is_empty(),
         "nothing was claimed, so no line is opened"
+    );
+}
+
+/// One episode's ending takes its own claims and leaves everyone else's.
+///
+/// The queue is reached through `HarnessDeps`, built once per company runtime
+/// and shared by `Arc` through every clone a message makes, so every episode
+/// in the company stages into the same `Vec`. An unkeyed drain handed the
+/// first episode to finish the claims of episodes still running -- opening a
+/// claimer's line while that teammate was still a live seat in the episode it
+/// claimed in, which is the one thing staging exists to prevent.
+#[test]
+fn a_drain_takes_only_the_claims_of_the_episode_that_ended() {
+    let queue = crate::hive::takeover::TakeoverQueue::default();
+    let claim = |episode: &str, seat: &str| crate::hive::takeover::TakeoverClaim {
+        episode: episode.into(),
+        seat: seat.into(),
+        chat: format!("dm:{seat}"),
+        at: 7,
+        saying: "I have this.".into(),
+    };
+    queue.stage(claim("ep-a", "engineer"));
+    queue.stage(claim("ep-b", "designer"));
+    queue.stage(claim("ep-a", "writer"));
+
+    let ended = queue.drain("ep-a");
+    assert_eq!(
+        ended.iter().map(|c| c.seat.as_str()).collect::<Vec<_>>(),
+        ["engineer", "writer"],
+        "both of this episode's claims, in the order they were staged: {ended:?}"
+    );
+
+    let other = queue.drain("ep-b");
+    assert_eq!(
+        other.iter().map(|c| c.seat.as_str()).collect::<Vec<_>>(),
+        ["designer"],
+        "and the episode still running kept its own, to act on when it ends: {other:?}"
+    );
+    assert!(
+        queue.drain("ep-a").is_empty() && queue.drain("ep-b").is_empty(),
+        "a claim is acted on once; draining twice would open the same line twice"
     );
 }

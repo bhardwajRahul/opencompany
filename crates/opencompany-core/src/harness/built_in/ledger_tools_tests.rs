@@ -717,4 +717,20 @@ fn the_boards_catalogue_line_is_replaceable_and_its_episode_form_promises_nothin
         "and it must name the verb that does work here, prefixed as the belt carries it: \
          {episode}"
     );
+
+    // **And it must not deny a verb the seat still has.**
+    //
+    // `assign_task` is the orchestrator's and is not withheld, while this
+    // swap runs for every episode seat including that one. A sentence saying
+    // the card verbs are gone would tell the orchestrator it cannot hand a
+    // card over when it can -- the same defect, pointed the other way, and
+    // the withheld-direction assertions above cannot see it.
+    assert!(
+        !episode.contains("hand"),
+        "the note claims only that opening a card is gone, never handing one over: {episode}"
+    );
+    assert!(
+        !episode.contains("assign_task") && !episode.contains("desk_assign_task"),
+        "`assign_task` survives an episode on the orchestrator's belt: {episode}"
+    );
 }

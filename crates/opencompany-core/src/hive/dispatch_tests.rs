@@ -318,33 +318,48 @@ async fn a_takeovers_job_is_a_row_in_the_claimers_line_and_the_episode_opens_at_
 
 /// The episode opens *at* the job and hangs *off* the claim.
 ///
-/// Two different questions that one field was answering. `seq` is what the
-/// seat is briefed from and what its assignment is; `parent` is where a
-/// reader finds the conversation. Rooting on the job row put every utterance
-/// under a `SYSTEM_AUTHOR` row, which the console draws as a pill with no
-/// "N replies" -- so a live run journaled the claimer's whole report to the
-/// operator and showed them a claim, a grey line, and "Episode complete".
+/// Asserted on the call site's own builder, not on `trigger_for`: the defect
+/// was this pairing, and `trigger_for` accepted the wrong one happily. The
+/// root is derived here exactly as `run_desk_message` derives it, so the two
+/// cannot drift back into a root nobody can open.
 #[test]
 fn a_carried_on_episode_is_assigned_at_the_job_and_threaded_on_the_claim() {
-    let claim_at = EventSeq::new(39);
+    let claim = crate::hive::takeover::TakeoverClaim {
+        episode: "ep-a".into(),
+        seat: "creative_director".into(),
+        chat: "dm:creative_director".into(),
+        at: 39,
+        saying: "  I'm owning the pricing launch end to end.  ".into(),
+    };
     let job_at = EventSeq::new(54);
 
-    let trigger = trigger_for(Some(job_at), "Carry it out.", Some(claim_at), &[]);
+    let trigger = carry_on_trigger(&claim, job_at);
 
     assert_eq!(
         trigger.seq, job_at,
-        "the assignment is the job, so that is what the brief reads from"
+        "the assignment is the job row, so that is what the brief reads from"
     );
     assert_eq!(
         trigger.parent,
-        Some(claim_at),
+        Some(EventSeq::new(39)),
         "and the thread roots on the claim, a message a reader can actually open"
     );
-    // Derived exactly as `run_desk_message` derives it, so the two cannot
-    // drift back into a root nobody can see.
     assert_eq!(
         trigger.parent.unwrap_or(trigger.seq),
-        claim_at,
-        "the root is the claim, never the job row"
+        EventSeq::new(39),
+        "the root `run_desk_message` derives is the claim, never the job row"
+    );
+    assert!(
+        trigger
+            .text
+            .contains("I'm owning the pricing launch end to end."),
+        "the claim is quoted, not pointed at: the brief window is the seat's unread rows and \
+         may not hold it: {}",
+        trigger.text
+    );
+    assert!(
+        !trigger.text.contains("  I'm owning"),
+        "trimmed, so the quote does not carry the tool call's whitespace: {}",
+        trigger.text
     );
 }

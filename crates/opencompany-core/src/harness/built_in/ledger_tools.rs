@@ -111,17 +111,6 @@ pub fn ledger_tools(
     ]
 }
 
-/// The prompt section describing the surface.
-///
-/// Sync over an already-resolved registry, because the prompt is assembled
-/// synchronously — see [`HarnessDeps::ledger_registry`](crate::harness::HarnessDeps::ledger_registry).
-///
-/// A **catalogue**, not a sentence saying the tools exist. The reader brief
-/// riemann started with said "`list_ledgers` names every one" and stopped,
-/// which puts the answer behind a call a model has to think to make — and a
-/// tool granted, unmentioned and never called is the observed failure mode, not
-/// a hypothetical one. So every ledger is named here with its purpose, built
-/// from the registry at prompt-assembly time, and a ledger declared afterwards
 /// How a native ledger's "who writes this, since not `record_entry`" reads in
 /// a persona.
 ///
@@ -135,13 +124,18 @@ pub fn written_by_note(spec: &crate::ledger::LedgerSpec) -> String {
 
 /// What replaces it for a seat inside an episode.
 ///
-/// A native ledger's `written_by` names the verbs that write it, and for
-/// `tasks` those are `spawn_task` and `assign_task` -- true of the company,
-/// and false of this seat, whose belt `EPISODE_WITHHELD_TOOLS` has already
-/// been stripped of the first. A live run shows the cost of leaving it: the
-/// claimer read the catalogue, went looking for `spawn_task`, and told the
-/// operator "opening the task card on the board isn't something I can do
-/// directly from here", then invented a route through another teammate.
+/// The standing line names both verbs that write the board, and only one of
+/// them is off this belt: `EPISODE_WITHHELD_TOOLS` takes `spawn_task`, while
+/// `assign_task` is the orchestrator's and stays. The swap runs for every
+/// episode seat, the orchestrator's included, so a sentence denying both
+/// would tell that seat it cannot hand a card over when it can -- the same
+/// defect this exists to remove, pointed the other way. It therefore claims
+/// only what is true of every seat: the verb that *opens* a card is gone.
+///
+/// A live run shows what leaving the standing line costs: the claimer read
+/// the catalogue, went looking for `spawn_task`, told the operator "opening
+/// the task card on the board isn't something I can do directly from here",
+/// and invented a route through another teammate.
 ///
 /// The registry line stays as it is -- it describes the company, and
 /// `registry_tests` holds it to naming those verbs on purpose. What changes
@@ -152,12 +146,22 @@ pub fn written_by_note(spec: &crate::ledger::LedgerSpec) -> String {
 #[must_use]
 pub fn episode_written_by_note(prefix: &str) -> String {
     format!(
-        " _(read-only here, and not writable from this conversation at all: the verbs that open \
-         and hand over a card are not on your belt inside an episode. `{prefix}ask` the teammate \
-         who should own the work instead.)_"
+        " _(read-only here, and the verb that opens a card is not on your belt inside an \
+         episode either. `{prefix}ask` the teammate who should do the work instead.)_"
     )
 }
 
+/// The prompt section describing the surface.
+///
+/// Sync over an already-resolved registry, because the prompt is assembled
+/// synchronously — see [`HarnessDeps::ledger_registry`](crate::harness::HarnessDeps::ledger_registry).
+///
+/// A **catalogue**, not a sentence saying the tools exist. The reader brief
+/// riemann started with said "`list_ledgers` names every one" and stopped,
+/// which puts the answer behind a call a model has to think to make — and a
+/// tool granted, unmentioned and never called is the observed failure mode, not
+/// a hypothetical one. So every ledger is named here with its purpose, built
+/// from the registry at prompt-assembly time, and a ledger declared afterwards
 /// is named in the next prompt built.
 pub fn ledger_brief(registry: &crate::ledger::Registry) -> String {
     let mut brief = String::from(

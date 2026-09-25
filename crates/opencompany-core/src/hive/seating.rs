@@ -34,6 +34,11 @@ use crate::ports::types::CompanyId;
 /// this is answers the operator directly and has nothing to announce.
 #[derive(Clone)]
 pub struct TakeoverLoan {
+    /// The episode the claiming seat is sitting in, stamped onto the claim so
+    /// only that episode's ending acts on it. See [`TakeoverClaim::episode`].
+    ///
+    /// [`TakeoverClaim::episode`]: crate::hive::takeover::TakeoverClaim::episode
+    pub episode: String,
     /// Where the announcement row is appended.
     pub events: Arc<dyn EventLog>,
     /// The company the row belongs to.

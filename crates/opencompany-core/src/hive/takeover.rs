@@ -34,6 +34,17 @@ use crate::hive::seating::TakeoverLoan;
 /// One guest seat's claim, staged for the episode to act on once it ends.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TakeoverClaim {
+    /// The episode this was staged inside.
+    ///
+    /// The queue is one per company runtime -- `HarnessDeps` is built once and
+    /// its `Arc` is shared by every `HarnessDeps::clone` a message makes -- so
+    /// "everything staged" is not this episode's claims, it is every open
+    /// episode's. Draining without this key let an episode finishing on one
+    /// desk carry on a claim made on another, opening the claimer's line while
+    /// that teammate was still a live seat in the episode it claimed in: the
+    /// one thing [`TakeoverQueue`] exists to prevent, reintroduced by the
+    /// drain.
+    pub episode: String,
     /// The teammate that took the work on. Its own operator line is where the
     /// work carries on.
     pub seat: String,
@@ -75,18 +86,29 @@ impl TakeoverQueue {
             .push(claim);
     }
 
-    /// Takes everything staged, leaving the queue empty.
+    /// Takes what `episode` staged, leaving every other episode's claims
+    /// where they are.
     ///
     /// Draining rather than reading: a claim acted on twice would open the
-    /// same line twice, and this queue is shared for the life of the process.
+    /// same line twice, and this queue lives as long as the company runtime.
+    ///
+    /// Keyed because it lives that long. It is reached through `HarnessDeps`,
+    /// built once per runtime and shared by `Arc` through every clone, so
+    /// every episode in the company stages into this one `Vec`. An unkeyed
+    /// drain therefore hands one episode's ending the claims of episodes that
+    /// are still running -- and opening a claimer's line while it is still a
+    /// seat elsewhere is exactly what staging exists to avoid.
     #[must_use]
-    pub fn drain(&self) -> Vec<TakeoverClaim> {
-        std::mem::take(
-            &mut *self
-                .claims
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner),
-        )
+    pub fn drain(&self, episode: &str) -> Vec<TakeoverClaim> {
+        let mut claims = self
+            .claims
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let (mine, theirs) = std::mem::take(&mut *claims)
+            .into_iter()
+            .partition(|claim| claim.episode == episode);
+        *claims = theirs;
+        mine
     }
 }
 
@@ -233,6 +255,7 @@ impl Tool for TakeOverTool {
                 // would run the same teammate twice at once. The episode acts
                 // on it once it ends.
                 self.loan.queue.stage(TakeoverClaim {
+                    episode: self.loan.episode.clone(),
                     seat: self.loan.agent.clone(),
                     chat: chat.clone(),
                     at: seq.value(),

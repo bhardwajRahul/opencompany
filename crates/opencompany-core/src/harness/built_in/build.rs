@@ -1747,7 +1747,8 @@ pub fn agent_spec_for(
                 // operator's own line empty.
                 tracing::warn!(
                     prefix = crate::hive::host::TOOL_PREFIX,
-                    "[hive] a guest seat was lent a takeover but got no verb:                      `complete_episode` was not on its belt to wrap"
+                    "[hive] a guest seat was lent a takeover but got no verb: `complete_episode` was \
+                     not on its belt to wrap"
                 );
             }
             // **The gate is the episode's, over this company's.**

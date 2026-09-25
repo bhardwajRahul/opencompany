@@ -357,47 +357,25 @@ impl DeskHost {
         Ok(card)
     }
 
-    /// Parks what a seat's turn raised, telling the seat about anything that
-    /// did not reach the operator. `true` when something parked.
-
-    /// Where one seat's publish is filed.
+    /// Where one seat's publish is filed, and under which thread.
     ///
-    /// A desk takes it on the desk: that is the room the work came out of, and
-    /// everyone there is meant to see it.
+    /// The chat is [`DeskHost::row_chat`]'s answer -- one rule for every row
+    /// a seat produces, whether it is speech, a delivery or a publish, so the
+    /// three cannot drift into filing the same seat's work in two places.
+    /// That doc carries the reasoning; what is added here is the thread.
     ///
-    /// **A DM is not that room.** Its membership is the whole roster so that
-    /// `ask` has legal targets (`graph::dm_hives`), not because the roster is
-    /// an audience -- the same conflation `broadcast_withheld_in` already
-    /// closes for one verb. Filed to the desk, a teammate the owner delegated
-    /// to put its deliverable straight into the operator's private line with
-    /// somebody else: authored by a teammate they never messaged, with empty
-    /// text, because a publish row carries its content in `outputs`.
-    ///
-    /// It belongs to the conversation it came out of. The owner reads that in
-    /// its next brief (`EpisodeBrief::conversations`) and decides what the
-    /// operator hears -- which it already does well: asked to own a campaign,
-    /// one named every teammate's contribution and raised the blocker, while
-    /// the leaked rows said nothing and the console folded them away.
-    ///
-    /// # The pair this picks
-    ///
-    /// The owner's. A non-owner seat is in this episode because somebody asked
-    /// it, and in an operator DM that is nearly always the owner -- whose line
-    /// this is, and who answers to the operator for it. A seat asked by
-    /// another non-owner is filed to the owner too rather than to that pair:
-    /// the owner is accountable either way, and the alternative is guessing at
-    /// an asker from a conversation map that can hold several.
-    fn publish_chat(&self, seat: &str) -> (String, Option<EventSeq>) {
-        match self
-            .desk_id
-            .strip_prefix(crate::runtime::assignee::DM_PREFIX)
-            .filter(|owner| *owner != seat)
-        {
-            Some(owner) => (crate::hive::referral::pair_conversation(seat, owner), None),
-            None => (self.desk_id.clone(), self.thread_root),
-        }
+    /// A pair channel gets `None`. The episode's thread root is a position in
+    /// the desk's transcript and means nothing in the pair conversation, so
+    /// carrying it there would parent the row to an unrelated row or to
+    /// nothing at all. On the desk itself the root still applies.
+    pub(super) fn publish_chat(&self, seat: &str) -> (String, Option<EventSeq>) {
+        let chat = self.row_chat(seat);
+        let thread = (chat == self.desk_id).then_some(self.thread_root).flatten();
+        (chat, thread)
     }
 
+    /// Parks what a seat's turn raised, telling the seat about anything that
+    /// did not reach the operator. `true` when something parked.
     pub(super) async fn park_seat(&self, seat: &str, settled: SettledTurn) -> bool {
         let SettledTurn {
             requests,

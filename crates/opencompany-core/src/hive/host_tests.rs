@@ -518,3 +518,51 @@ async fn a_desk_row_is_unchanged_whoever_wrote_it() {
         "a desk is a real room and a member's row belongs on it"
     );
 }
+
+/// A publish is filed by the same rule as a row, and only a desk carries the
+/// episode's thread.
+///
+/// `publish_chat` defers to `row_chat` so speech, deliveries and publishes
+/// cannot drift into filing one seat's work in two places — this asserts the
+/// deferral and the one thing it adds. The thread root is a position in the
+/// desk's transcript; carrying it into a pair channel would parent the row to
+/// an unrelated row or to nothing.
+#[test]
+fn a_publish_is_filed_where_its_rows_are_and_only_a_desk_keeps_the_thread() {
+    let log = Arc::new(MemoryLog::default());
+    let host = DeskHost::new(
+        CompanyId::new("acme"),
+        "dm:grace".to_owned(),
+        "Grace".to_owned(),
+        Arc::clone(&log) as Arc<dyn EventLog>,
+        Vec::new(),
+    )
+    .in_thread(Some(crate::ports::types::EventSeq::new(11)));
+
+    let (guest_chat, guest_thread) = host.publish_chat("ada");
+    assert_eq!(
+        guest_chat,
+        host.row_chat("ada"),
+        "one rule for every row a seat produces, publish included"
+    );
+    assert_eq!(
+        guest_chat,
+        crate::hive::referral::pair_conversation("ada", "grace"),
+        "and that rule sends a non-owner's work to its conversation with the owner"
+    );
+    assert!(
+        guest_thread.is_none(),
+        "the desk's thread root means nothing in a pair channel: {guest_thread:?}"
+    );
+
+    let (owner_chat, owner_thread) = host.publish_chat("grace");
+    assert_eq!(
+        owner_chat, "dm:grace",
+        "the owner's own work stays on its line"
+    );
+    assert_eq!(
+        owner_thread,
+        Some(crate::ports::types::EventSeq::new(11)),
+        "where the episode's thread root does apply"
+    );
+}

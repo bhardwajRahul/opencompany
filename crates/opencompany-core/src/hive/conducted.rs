@@ -284,8 +284,14 @@ pub struct Trigger {
 }
 
 /// What one episode came to, in this host's words.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct EpisodeReport {
+    /// Which episode this is the report for.
+    ///
+    /// Carried so the caller can drain exactly this episode's staged
+    /// takeovers. The id is minted inside `run_desk_message`, so without it
+    /// `spawn_episode` had no key and drained the company's whole queue.
+    pub episode_id: String,
     /// Seat turns run.
     pub turns: u64,
     /// Waves proposed.
@@ -296,9 +302,12 @@ pub struct EpisodeReport {
     pub settled: usize,
 }
 
-impl From<Report> for EpisodeReport {
-    fn from(report: Report) -> Self {
+impl EpisodeReport {
+    /// The driver's report, named with the episode it came from.
+    #[must_use]
+    pub fn of(episode_id: impl Into<String>, report: Report) -> Self {
         Self {
+            episode_id: episode_id.into(),
             turns: report.turns,
             waves: report.waves,
             conversations: report.conversations,
@@ -424,7 +433,7 @@ impl HiveDispatcher {
         })
         .await?;
         self.complete(&desk.desk_id, &episode_id, &report).await?;
-        Ok(report.into())
+        Ok(EpisodeReport::of(episode_id, report))
     }
 
     /// Carry on a parked episode from its last checkpoint, once an operator
@@ -485,7 +494,7 @@ impl HiveDispatcher {
         )
         .await?;
         self.complete(&desk.desk_id, episode_id, &report).await?;
-        Ok(Some(report.into()))
+        Ok(Some(EpisodeReport::of(episode_id, report)))
     }
 
     /// Journals an episode's closing row.

@@ -318,31 +318,6 @@ impl DeskHost {
         })
     }
 
-    /// The channel a committed row is filed under.
-    ///
-    /// Three cases, read straight off the commit:
-    ///
-    /// * an **ask** opens a conversation and is its first row, so it goes to
-    ///   the pair channel it names -- the question belongs with its answer,
-    ///   not in the room's own timeline;
-    /// * a row **landing in a thread** is inside that conversation, and the
-    ///   thread is the ask row that roots it;
-    /// * everything else is the desk's.
-    ///
-    /// Routed on the thread, never on `Commit::conversation`. A hand-off a
-    /// seat makes *while* talking carries that marker and lands with no
-    /// thread, because it belongs to the room: routing on the marker would
-    /// file public work where only two seats could read it, and nothing
-    /// would say so.
-    ///
-    /// # Errors
-    ///
-    /// Why, for the caller to dress: a thread whose conversation this host
-    /// never saw open. Deliberately an
-    /// error rather than a fall back to the desk: falling back would publish
-    /// a private row, which is the failure this whole arrangement exists to
-    /// prevent.
-
     /// The chat one seat's row belongs in.
     ///
     /// A desk takes it: a desk is a real room and a member's row belongs on
@@ -376,6 +351,30 @@ impl DeskHost {
         }
     }
 
+    /// The channel a committed row is filed under.
+    ///
+    /// Three cases, read straight off the commit:
+    ///
+    /// * an **ask** opens a conversation and is its first row, so it goes to
+    ///   the pair channel it names -- the question belongs with its answer,
+    ///   not in the room's own timeline;
+    /// * a row **landing in a thread** is inside that conversation, and the
+    ///   thread is the ask row that roots it;
+    /// * everything else is the desk's.
+    ///
+    /// Routed on the thread, never on `Commit::conversation`. A hand-off a
+    /// seat makes *while* talking carries that marker and lands with no
+    /// thread, because it belongs to the room: routing on the marker would
+    /// file public work where only two seats could read it, and nothing
+    /// would say so.
+    ///
+    /// # Errors
+    ///
+    /// Why, for the caller to dress: a thread whose conversation this host
+    /// never saw open. Deliberately an
+    /// error rather than a fall back to the desk: falling back would publish
+    /// a private row, which is the failure this whole arrangement exists to
+    /// prevent.
     fn channel_for(&self, commit: &Commit) -> Result<String, String> {
         if let tinyhivemind::speech::Utterance::Ask { to, .. } = &commit.utterance {
             return Ok(crate::hive::referral::pair_conversation(&commit.author, to));
@@ -1059,6 +1058,7 @@ impl EpisodeHost for DeskHost {
         // offers it only when this is `Some`.
         let takeover = crate::hive::takeover::is_guest_seat(&self.desk_id, seat).then(|| {
             crate::hive::seating::TakeoverLoan {
+                episode: self.episode_id.clone(),
                 events: Arc::clone(&self.events),
                 company: self.company.clone(),
                 agent: seat.to_owned(),
