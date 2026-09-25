@@ -226,7 +226,15 @@ pub fn spawn_episode(
 ) -> tokio::task::JoinHandle<Option<EpisodeReport>> {
     let task: std::pin::Pin<Box<dyn std::future::Future<Output = Option<EpisodeReport>> + Send>> =
         Box::pin(async move {
-            let outcome = match dispatcher.run_desk_message(&desk_id, trigger).await {
+            // Minted here, not inside, so the id survives a failure: a claim
+            // staged by an episode that then errored is still a claim the
+            // operator holds a durable row about, and a queue that lives as
+            // long as the runtime would strand it.
+            let episode_id = uuid::Uuid::new_v4().simple().to_string();
+            let outcome = match dispatcher
+                .run_desk_message_as(&desk_id, trigger, episode_id.clone())
+                .await
+            {
                 Ok(report) => Some(report),
                 Err(error) => {
                     tracing::warn!(desk = %desk_id, %error, "[hive] the episode failed");
@@ -246,9 +254,7 @@ pub fn spawn_episode(
             // that just succeeded: the conversation really did transfer and
             // the operator really was told, so the recoverable state is a line
             // that needs one more message, not a run to unwind.
-            if let Some(report) = &outcome {
-                carry_on_takeovers(&dispatcher, &report.episode_id).await;
-            }
+            carry_on_takeovers(&dispatcher, &episode_id).await;
             outcome
         });
     tokio::spawn(task)

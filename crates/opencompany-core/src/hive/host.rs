@@ -560,9 +560,22 @@ impl DeskHost {
             episode: None,
             // A row of a conversation hangs off the ask that rooted it;
             // otherwise off the thread the episode itself was opened in.
+            // **A desk position means nothing in a pair channel.**
+            //
+            // `thread_root` is a sequence in the desk's own transcript, and a
+            // row redirected to `dm:<a>+<b>` by `row_chat` lands in a channel
+            // that does not contain it. History projects the parent anyway,
+            // so the console looks for a root that is not there and draws an
+            // orphaned flat row instead of a reply in the conversation.
+            //
+            // Safe to drop rather than translate: a conversation is grouped
+            // by `ConversationOpened.root` (`server::chat_history`), never by
+            // this field, so nothing downstream is reading it. A row that
+            // names its own thread still keeps it -- a conclusion does -- and
+            // a row on the desk itself is unchanged.
             parent: thread
                 .map(|root| EventSeq::new(root.0))
-                .or(self.thread_root),
+                .or_else(|| (chat == self.desk_id).then_some(self.thread_root).flatten()),
             mentions: Vec::new(),
             mention_depth: 0,
             audience,

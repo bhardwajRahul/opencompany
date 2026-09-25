@@ -165,6 +165,30 @@ describe("buildTimeline", () => {
   });
 
   /**
+   * Every child of the root shares its bucket, not just this turn's, so
+   * carrier promotion stops at the operator's next line. Without the bound,
+   * `[root, answer, follow-up, laterCarrier]` passes every other test — the
+   * answer is the first non-carrier and nothing interleaves it with the root
+   * — and the later carrier is lifted out of the thread the operator
+   * deliberately opened.
+   */
+  it("does not promote a carrier that belongs to a later exchange", () => {
+    const outputs = [{ kind: "workspace-node", targetId: "n1", title: "brief.md" }];
+    const entries = buildTimeline(
+      [
+        message({ id: "a", text: "own the pricing launch" }),
+        message({ id: "b", from: "company", text: "On it.", parentId: "a", at: T0 + 1 }),
+        message({ id: "c", text: "and the paid ads?", parentId: "a", at: T0 + 2 }),
+        message({ id: "d", from: "company", text: "", parentId: "a", at: T0 + 3, outputs }),
+      ],
+      CHANNEL,
+      [],
+    );
+
+    expect(entries.map((e) => e.message.id)).toEqual(["a", "b"]);
+  });
+
+  /**
    * Two things actually said still fold. The carrier rule narrows what counts
    * as speech; it does not retire the boundary promotion was built for.
    */

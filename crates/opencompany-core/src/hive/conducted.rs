@@ -386,13 +386,34 @@ impl HiveDispatcher {
     ///
     /// A desk that runs no hive, and whatever stops the episode.
     pub async fn run_desk_message(&self, desk_id: &str, trigger: Trigger) -> Result<EpisodeReport> {
+        self.run_desk_message_as(desk_id, trigger, uuid::Uuid::new_v4().simple().to_string())
+            .await
+    }
+
+    /// The same, under an id the caller minted.
+    ///
+    /// Split out because a caller that must act on the episode *after* it
+    /// ends needs its id on the failing path too, and an id minted inside is
+    /// lost with the error. `spawn_episode` drains this episode's staged
+    /// takeovers either way: a claim whose episode failed is still a claim
+    /// the operator has been told about in a durable row, and leaving it in a
+    /// queue that lives as long as the runtime strands it for good.
+    ///
+    /// # Errors
+    ///
+    /// Whatever stops the episode opening or running.
+    pub async fn run_desk_message_as(
+        &self,
+        desk_id: &str,
+        trigger: Trigger,
+        episode_id: String,
+    ) -> Result<EpisodeReport> {
         let desk = self.hive(desk_id).ok_or_else(|| {
             OpenCompanyError::InvalidRequest(format!("desk `{desk_id}` runs no hive"))
         })?;
         let thread_root = trigger.parent.unwrap_or(trigger.seq);
         let routing = desk_routing(&self.record, desk_id);
         let (starters, plan_dto) = self.opening(&desk, &routing, &trigger, thread_root).await?;
-        let episode_id = uuid::Uuid::new_v4().simple().to_string();
         self.events
             .append(
                 &self.record.id,

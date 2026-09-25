@@ -454,13 +454,23 @@ function inlineFirstReplies(
     }
     if (!interleaved) {
       inline.add(first.id);
-      // **The whole turn, or none of it.**
+      // **The whole turn, or none of it — and only this turn.**
       //
       // Promotion is only safe because it empties the chip. Lifting the
       // write-up and leaving its file links folded would put one turn's
-      // output on two surfaces -- the exact split this rule refuses for a
-      // capped turn -- and hand the reader a chip holding two blank rows.
-      for (const row of bucket) if (carrier(row)) inline.add(row.id);
+      // output on two surfaces — the exact split this rule refuses for a
+      // capped turn — and hand the reader a chip holding blank rows.
+      //
+      // Bounded at the operator's next line, because every child of the root
+      // is in this bucket, not just this turn's. `[root, answer, follow-up,
+      // laterCarrier]` passes every test above — the answer is the first
+      // non-carrier and nothing interleaves it with the root — and promoting
+      // every carrier would lift a file link belonging to a later exchange
+      // into the channel, out of the thread the operator deliberately opened.
+      for (const row of bucket) {
+        if (row.from === "you") break;
+        if (carrier(row)) inline.add(row.id);
+      }
     }
   }
   return inline;
