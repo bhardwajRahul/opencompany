@@ -5914,6 +5914,43 @@ pub(crate) fn seat_persona(
         }
     }
 
+    // **And the ledger catalogue, which names them too.**
+    //
+    // The two briefs above are not the only prose that hands a seat a verb
+    // name. `ledger_brief` prints every native ledger's `written_by`, and the
+    // board's says "`spawn_task` to open a card, `assign_task` to hand it
+    // over" -- true of the company, and false of a seat whose belt was just
+    // stripped of the first. The strip above is by exact match on two known
+    // blocks and could not see a third.
+    //
+    // A live run paid for it. The claimer read the catalogue, went looking,
+    // found nothing, and told the operator "opening the task card on the
+    // board isn't something I can do directly from here", then routed the
+    // work through a teammate it had invented a reason to involve. The same
+    // failure the comment above describes, arriving by a different sentence.
+    //
+    // Driven off `EPISODE_WITHHELD_TOOLS` rather than off the `tasks` slug,
+    // so a ledger declared later whose writer prose names a withheld verb is
+    // covered without anyone remembering this exists.
+    for spec in deps.ledger_registry.specs() {
+        if spec.source != crate::ledger::LedgerSource::Native
+            || !EPISODE_WITHHELD_TOOLS
+                .iter()
+                .any(|tool| spec.written_by.contains(tool))
+        {
+            continue;
+        }
+        let rendered = crate::harness::ledger_tools::written_by_note(spec);
+        if let Some(at) = blueprint.system_prompt.find(&rendered) {
+            let replacement = crate::harness::ledger_tools::episode_written_by_note(
+                crate::hive::host::TOOL_PREFIX,
+            );
+            blueprint
+                .system_prompt
+                .replace_range(at..at + rendered.len(), &replacement);
+        }
+    }
+
     // The belt reaches the pooled agent per turn through `EpisodeBelts`; the
     // standing prompt cannot, because a seeded turn is not cold and composes
     // none. The host puts this at the head of the seed instead -- see

@@ -122,6 +122,42 @@ pub fn ledger_tools(
 /// tool granted, unmentioned and never called is the observed failure mode, not
 /// a hypothetical one. So every ledger is named here with its purpose, built
 /// from the registry at prompt-assembly time, and a ledger declared afterwards
+/// How a native ledger's "who writes this, since not `record_entry`" reads in
+/// a persona.
+///
+/// Its own function because an episode seat has to find this exact string to
+/// replace it -- see [`episode_written_by_note`]. Built in one place so the
+/// two can never disagree about what was rendered.
+#[must_use]
+pub fn written_by_note(spec: &crate::ledger::LedgerSpec) -> String {
+    format!(" _(read-only here: {})_", spec.written_by)
+}
+
+/// What replaces it for a seat inside an episode.
+///
+/// A native ledger's `written_by` names the verbs that write it, and for
+/// `tasks` those are `spawn_task` and `assign_task` -- true of the company,
+/// and false of this seat, whose belt `EPISODE_WITHHELD_TOOLS` has already
+/// been stripped of the first. A live run shows the cost of leaving it: the
+/// claimer read the catalogue, went looking for `spawn_task`, and told the
+/// operator "opening the task card on the board isn't something I can do
+/// directly from here", then invented a route through another teammate.
+///
+/// The registry line stays as it is -- it describes the company, and
+/// `registry_tests` holds it to naming those verbs on purpose. What changes
+/// is what an episode seat is shown in its place.
+///
+/// Takes the prefix for the reason every note here does: the belt carries
+/// `desk_ask`, and a note that says `ask` names a tool the seat cannot see.
+#[must_use]
+pub fn episode_written_by_note(prefix: &str) -> String {
+    format!(
+        " _(read-only here, and not writable from this conversation at all: the verbs that open \
+         and hand over a card are not on your belt inside an episode. `{prefix}ask` the teammate \
+         who should own the work instead.)_"
+    )
+}
+
 /// is named in the next prompt built.
 pub fn ledger_brief(registry: &crate::ledger::Registry) -> String {
     let mut brief = String::from(
@@ -140,7 +176,7 @@ pub fn ledger_brief(registry: &crate::ledger::Registry) -> String {
         let purpose = crate::ledger::budget::truncate(&spec.purpose, 300);
         brief.push_str(&format!("- `{}` — {purpose}", spec.slug));
         if spec.source == LedgerSource::Native {
-            brief.push_str(&format!(" _(read-only here: {})_", spec.written_by));
+            brief.push_str(&written_by_note(spec));
         } else if !spec.writable_by("") {
             brief.push_str(" _(writable by a named few; try it and the refusal says who)_");
         }
