@@ -414,3 +414,107 @@ role = "Copywriter"
     );
     assert_eq!(super::seat_display_name(None, "copywriter"), "copywriter");
 }
+
+/// **A teammate's work does not land in somebody else's operator line.**
+///
+/// A DM binds the whole roster so `ask` has legal targets
+/// (`graph::dm_hives`) -- membership is reachability, not an audience. A seat
+/// the owner asks takes its turn in the owner's episode, and a turn that
+/// publishes through a belt tool carries no speech act: it commits as a
+/// thread-less `Post`, which `channel_for`'s fallback filed on the desk. In a
+/// DM that desk is the operator's private line with somebody else.
+///
+/// A live run put three artifacts there that way -- rows authored by
+/// `copywriter` and `landing_page_builder` in the operator's line with the
+/// Creative Director, each with empty text because a publish carries its
+/// content in `outputs`, and each folded out of sight by the console.
+///
+/// The owner reads the exchange in its next brief and reports it; that run's
+/// owner named every teammate's contribution and raised the blocker. So the
+/// row belongs to the conversation, and the summary is what the operator
+/// reads.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_non_owners_deskless_row_stays_out_of_the_operators_dm() {
+    let log = Arc::new(MemoryLog::default());
+    let host = DeskHost::new(
+        CompanyId::new("acme"),
+        "dm:grace".to_owned(),
+        "Grace".to_owned(),
+        Arc::clone(&log) as Arc<dyn EventLog>,
+        Vec::new(),
+    );
+
+    host.commit(&commit(serde_json::json!({
+        "author": "ada",
+        "utterance": { "kind": "post", "message": "" },
+        "thread": null,
+        "only_for": null,
+        "conversation": null,
+        "purpose": { "kind": "desk" },
+    })))
+    .expect("the journal takes the row");
+
+    assert!(
+        log.replies("dm:grace").is_empty(),
+        "a teammate that is only in this DM to be askable writes nothing into it: {:?}",
+        log.replies("dm:grace")
+    );
+    let pair = crate::hive::referral::pair_conversation("ada", "grace");
+    assert_eq!(
+        log.replies(&pair).len(),
+        1,
+        "it belongs to its conversation with the owner, where the owner reads it"
+    );
+}
+
+/// The owner's own row still lands on its line -- that is its line.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dm_owners_own_row_still_lands_on_its_line() {
+    let log = Arc::new(MemoryLog::default());
+    let host = DeskHost::new(
+        CompanyId::new("acme"),
+        "dm:grace".to_owned(),
+        "Grace".to_owned(),
+        Arc::clone(&log) as Arc<dyn EventLog>,
+        Vec::new(),
+    );
+
+    host.commit(&commit(serde_json::json!({
+        "author": "grace",
+        "utterance": { "kind": "post", "message": "here is where it stands" },
+        "thread": null,
+        "only_for": null,
+        "conversation": null,
+        "purpose": { "kind": "desk" },
+    })))
+    .expect("the journal takes the row");
+
+    assert_eq!(
+        log.replies("dm:grace").len(),
+        1,
+        "the teammate whose DM it is answers in it, as it always did"
+    );
+}
+
+/// And a desk is untouched: a desk IS the room, and everyone there sees it.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_desk_row_is_unchanged_whoever_wrote_it() {
+    let log = Arc::new(MemoryLog::default());
+    let host = host(Arc::clone(&log) as Arc<dyn EventLog>);
+
+    host.commit(&commit(serde_json::json!({
+        "author": "ada",
+        "utterance": { "kind": "post", "message": "shipping the freeze note" },
+        "thread": null,
+        "only_for": null,
+        "conversation": null,
+        "purpose": { "kind": "desk" },
+    })))
+    .expect("the journal takes the row");
+
+    assert_eq!(
+        log.replies("engineering").len(),
+        1,
+        "a desk is a real room and a member's row belongs on it"
+    );
+}

@@ -342,6 +342,40 @@ impl DeskHost {
     /// error rather than a fall back to the desk: falling back would publish
     /// a private row, which is the failure this whole arrangement exists to
     /// prevent.
+
+    /// The chat one seat's row belongs in.
+    ///
+    /// A desk takes it: a desk is a real room and a member's row belongs on
+    /// it.
+    ///
+    /// **A DM does not.** Its membership is the whole roster so that `ask` has
+    /// legal targets (`graph::dm_hives`) -- reachability, not an audience. The
+    /// same conflation `broadcast_withheld_in` closes for one verb arrives
+    /// here by two other roads: a thread-less commit, and a delivery row
+    /// flushed for a seat that published. Either way a teammate the owner
+    /// merely asked writes into the operator's private line with somebody
+    /// else -- authored by someone they never messaged, and empty, because a
+    /// delivery row carries its content in `outputs`.
+    ///
+    /// A live run put three artifacts there that way. The owner had already
+    /// reported all of it properly in its own summary, naming each
+    /// teammate's contribution and raising the blocker, so the rows added
+    /// nothing and the console folded them out of sight.
+    ///
+    /// The owner's pair, not the asker's: a non-owner is in this episode
+    /// because somebody asked it, and in an operator DM that is nearly always
+    /// the owner -- whose line this is, and who answers for it either way.
+    fn row_chat(&self, author: &str) -> String {
+        match self
+            .desk_id
+            .strip_prefix(crate::runtime::assignee::DM_PREFIX)
+            .filter(|owner| *owner != author)
+        {
+            Some(owner) => crate::hive::referral::pair_conversation(author, owner),
+            None => self.desk_id.clone(),
+        }
+    }
+
     fn channel_for(&self, commit: &Commit) -> Result<String, String> {
         if let tinyhivemind::speech::Utterance::Ask { to, .. } = &commit.utterance {
             return Ok(crate::hive::referral::pair_conversation(&commit.author, to));
@@ -371,7 +405,31 @@ impl DeskHost {
             return Ok(chat);
         }
         let Some(root) = commit.thread else {
-            return Ok(self.desk_id.clone());
+            // **A DM's line belongs to the teammate whose line it is.**
+            //
+            // A DM binds the whole roster so `ask` has legal targets
+            // (`graph::dm_hives`) -- membership is reachability, not an
+            // audience. The same conflation `broadcast_withheld_in` closes for
+            // one verb reaches here by another road: a seat the owner asked
+            // takes its turn in this episode, publishes through a belt tool,
+            // and its turn carries no speech act -- so it commits as a
+            // thread-less `Post` and this fallback files it on the desk. In a
+            // DM that desk is the operator's private line with somebody else,
+            // and the row lands there authored by a teammate they never
+            // messaged, with empty text, carrying the artifacts in `outputs`.
+            //
+            // It belongs to the conversation that produced it. The owner reads
+            // that in its next brief (`EpisodeBrief::conversations`) and
+            // decides what the operator hears -- which it does well: asked to
+            // own a campaign, one named every teammate's contribution and
+            // raised the blocker, while the leaked rows said nothing and the
+            // console folded them out of sight.
+            //
+            // The owner's pair, not the asker's: a non-owner is in this
+            // episode because somebody asked it, and in an operator DM that is
+            // nearly always the owner -- whose line this is, and who answers
+            // for it either way.
+            return Ok(self.row_chat(&commit.author));
         };
         self.conversations
             .lock()

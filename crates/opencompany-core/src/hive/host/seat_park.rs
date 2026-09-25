@@ -336,16 +336,14 @@ impl DeskHost {
                 "a seat published a file but this host has no roster to file it with".to_string(),
             ));
         };
+        let (publish_chat, publish_root) = self.publish_chat(seat);
         let card = crate::harness::publish::filing::PublishFiling {
             company: &self.company,
             deps,
         }
         .record_conversation_publishes(
             seat,
-            crate::runtime::delegation::ChatTarget::in_thread(
-                Some(&self.desk_id),
-                self.thread_root,
-            ),
+            crate::runtime::delegation::ChatTarget::in_thread(Some(&publish_chat), publish_root),
             publishes,
         )
         .await?;
@@ -361,6 +359,45 @@ impl DeskHost {
 
     /// Parks what a seat's turn raised, telling the seat about anything that
     /// did not reach the operator. `true` when something parked.
+
+    /// Where one seat's publish is filed.
+    ///
+    /// A desk takes it on the desk: that is the room the work came out of, and
+    /// everyone there is meant to see it.
+    ///
+    /// **A DM is not that room.** Its membership is the whole roster so that
+    /// `ask` has legal targets (`graph::dm_hives`), not because the roster is
+    /// an audience -- the same conflation `broadcast_withheld_in` already
+    /// closes for one verb. Filed to the desk, a teammate the owner delegated
+    /// to put its deliverable straight into the operator's private line with
+    /// somebody else: authored by a teammate they never messaged, with empty
+    /// text, because a publish row carries its content in `outputs`.
+    ///
+    /// It belongs to the conversation it came out of. The owner reads that in
+    /// its next brief (`EpisodeBrief::conversations`) and decides what the
+    /// operator hears -- which it already does well: asked to own a campaign,
+    /// one named every teammate's contribution and raised the blocker, while
+    /// the leaked rows said nothing and the console folded them away.
+    ///
+    /// # The pair this picks
+    ///
+    /// The owner's. A non-owner seat is in this episode because somebody asked
+    /// it, and in an operator DM that is nearly always the owner -- whose line
+    /// this is, and who answers to the operator for it. A seat asked by
+    /// another non-owner is filed to the owner too rather than to that pair:
+    /// the owner is accountable either way, and the alternative is guessing at
+    /// an asker from a conversation map that can hold several.
+    fn publish_chat(&self, seat: &str) -> (String, Option<EventSeq>) {
+        match self
+            .desk_id
+            .strip_prefix(crate::runtime::assignee::DM_PREFIX)
+            .filter(|owner| *owner != seat)
+        {
+            Some(owner) => (crate::hive::referral::pair_conversation(seat, owner), None),
+            None => (self.desk_id.clone(), self.thread_root),
+        }
+    }
+
     pub(super) async fn park_seat(&self, seat: &str, settled: SettledTurn) -> bool {
         let SettledTurn {
             requests,
