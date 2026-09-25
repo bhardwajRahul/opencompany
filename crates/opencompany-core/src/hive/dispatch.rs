@@ -271,12 +271,54 @@ async fn carry_on_takeovers(dispatcher: &Arc<HiveDispatcher>) {
             );
             continue;
         }
-        let trigger = trigger_for(
-            Some(crate::ports::types::EventSeq::new(claim.at)),
-            &claim.saying,
-            None,
-            &[],
+        // **The opening has to be a row, because a row is all the seat reads.**
+        //
+        // Seeding the episode at the claim's own sequence left the seat
+        // answering itself: it opened its line, saw its own sentence and the
+        // word "concluded", and was told by the brief that *that* was its
+        // assignment. A live run closed in two turns having asked nobody --
+        // it had not been given anything to do.
+        //
+        // Handing the instruction to `trigger_for` does not fix it. A
+        // trigger's text only picks who speaks first (`opening`), and in a DM
+        // `dm_opening` pins the owner and returns before even reading it, so
+        // the sentence is built and dropped. What a seat is briefed from is
+        // the journal from `trigger.seq` on -- so the job has to be written
+        // there, and the episode opened at the row that carries it.
+        //
+        // Addressed to the claimer alone, by the author the driver's own
+        // notes use, so it reads in the brief the way a nudge does and the
+        // operator's line is not given a second announcement to scroll past.
+        let opening = format!(
+            "You have taken this work on. In your own words: \"{}\"\n\nIt is yours now, and \
+             this is your line with the operator. Carry it out, and tell them where it stands \
+             when you have something worth reading.",
+            claim.saying.trim()
         );
+        // Falls back to the claim's sequence, which is where this opened
+        // before the row existed. A journal that will not take the row is not
+        // a reason to strand work a teammate has already accepted in public;
+        // the degraded episode is the old behaviour, and the warning says so.
+        let opened_at = match brief_takeover(
+            dispatcher.events.as_ref(),
+            &dispatcher.record.id,
+            &claim.seat,
+            &opening,
+        )
+        .await
+        {
+            Ok(seq) => seq,
+            Err(error) => {
+                tracing::warn!(
+                    seat = %claim.seat,
+                    %error,
+                    "[hive] a takeover's opening could not be journaled, so its episode opens \
+                     on the claim itself and the seat is briefed with no job"
+                );
+                crate::ports::types::EventSeq::new(claim.at)
+            }
+        };
+        let trigger = trigger_for(Some(opened_at), &opening, None, &[]);
         tracing::info!(
             seat = %claim.seat,
             chat = %claim.chat,
@@ -365,6 +407,60 @@ pub async fn announce_takeover(
         )
         .await?;
     Ok((chat, seq))
+}
+
+/// Writes the job into the claimer's line and says where the episode opens.
+///
+/// # Why this is a row and not a prompt
+///
+/// Because a seat is briefed from the journal, not from the trigger. A
+/// `Trigger`'s text reaches exactly one place -- [`HiveDispatcher::opening`],
+/// which uses it to route who speaks first -- and in a DM [`dm_opening`] pins
+/// the owner and returns before that read happens. Everything the seat
+/// actually sees is the rows from `trigger.seq` on. So an instruction that is
+/// not a row is an instruction nobody receives, which is what a live run
+/// found: the episode opened at the claim's sequence, and the brief told the
+/// claimer its assignment *was* the claim it had already made.
+///
+/// # Why `SYSTEM_AUTHOR`, and addressed
+///
+/// The same author the driver's own notes carry, so the brief renders this
+/// the way it renders a nudge -- as the room telling a seat something, which
+/// is what it is. The audience is the claimer alone: the operator has already
+/// been told by [`announce_takeover`], and a second row saying the same thing
+/// in their own words would be theirs to scroll past for nothing.
+///
+/// # Errors
+///
+/// Whatever stops the journal accepting the row.
+pub async fn brief_takeover(
+    events: &dyn EventLog,
+    company: &crate::ports::types::CompanyId,
+    agent: &str,
+    job: &str,
+) -> crate::Result<EventSeq> {
+    events
+        .append(
+            company,
+            CompanyEvent::AgentReply {
+                chat_id: crate::company::blocker_sender::dm_thread(agent),
+                agent_id: crate::ports::SYSTEM_AUTHOR.to_owned(),
+                text: job.to_owned(),
+                steps: Vec::new(),
+                outputs: Vec::new(),
+                task_id: None,
+                parent: None,
+                mentions: Vec::new(),
+                mention_depth: 0,
+                audience: vec![agent.to_owned()],
+                // The row opens an episode; it is not one of its utterances.
+                // Stamping it would make the episode its own cause, and the
+                // console's band reads the first stamped row as the opening
+                // turn.
+                episode: None,
+            },
+        )
+        .await
 }
 
 /// What the teammate that handed work on tells the operator, if it says

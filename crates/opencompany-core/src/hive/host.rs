@@ -931,6 +931,37 @@ fn dm_persona_note(desk_id: &str, seat: &str) -> Option<&'static str> {
     })
 }
 
+/// What corrects the one line of the driver's brief a DM makes untrue.
+///
+/// Every seated turn ends with "Hand what is another seat's on with
+/// `broadcast`" -- written by `tinyhivemind-driver`, which has no hosts and
+/// so cannot know that [`crate::hive::seating::broadcast_withheld_in`] takes
+/// that verb off this belt. So the only hand-off instruction a seat in an
+/// operator's line is given names the one tool it does not have, and `ask` --
+/// the verb it does have, and the only one that actually transfers anything
+/// here -- is named nowhere in the brief at all.
+///
+/// A live run paid for exactly that: a teammate that had just claimed a
+/// campaign "end to end" opened its own line, named three teammates it would
+/// brief, and asked none of them.
+///
+/// This belongs to the host and not to the driver for the same reason
+/// [`dm_persona_note`] does: which verbs a DM withholds is this company's
+/// decision, and the crate that writes the brief has no way to ask.
+///
+/// Takes the prefix because the belt carries `desk_ask`, not `ask` -- naming
+/// a seat a tool it cannot see is the defect this exists to fix, from the
+/// other side (`takeover::guest_persona_note` records what that cost).
+#[must_use]
+fn broadcast_absent_note(prefix: &str) -> String {
+    format!(
+        "\n\nOne correction to the brief below your messages: it will tell you to hand a \
+         teammate's part on with `{prefix}broadcast`. You do not have that verb here -- there \
+         is no room in a direct line to broadcast into. `{prefix}ask` is how you reach a \
+         teammate from here, one at a time, and it is how work is actually handed to them."
+    )
+}
+
 impl EpisodeHost for DeskHost {
     fn build_seat(
         &self,
@@ -999,6 +1030,10 @@ impl EpisodeHost for DeskHost {
         let mut persona = seat_persona(record, deps, seat).map_err(|error| refused(&error))?;
         if let Some(note) = dm_persona_note(&self.desk_id, seat) {
             persona.push_str(note);
+            // Paired with the note above on purpose: both are true of exactly
+            // the conversations `dm_persona_note` answers for, and both
+            // correct the same brief.
+            persona.push_str(&broadcast_absent_note(TOOL_PREFIX));
         }
         // A verb it is handed but never told about is one a live run shows it
         // will not reach for, so the note travels with the tool.

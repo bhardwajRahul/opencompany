@@ -347,6 +347,36 @@ fn a_dm_seat_learns_whether_the_line_is_its_own() {
     );
 }
 
+/// A DM seat is told that the brief's one hand-off verb is not on its belt,
+/// and which verb is.
+///
+/// The brief `tinyhivemind-driver` writes ends "Hand what is another seat's
+/// on with `broadcast`" -- and `broadcast_withheld_in` takes that verb off
+/// every DM belt. Left alone, the only hand-off instruction a seat in an
+/// operator's line receives names the one tool it does not have, while `ask`
+/// is named nowhere in the brief at all. A live run had a teammate claim a
+/// campaign "end to end", name three teammates it would brief, and ask none
+/// of them.
+#[test]
+fn a_dm_seat_is_told_the_briefs_broadcast_is_not_on_its_belt() {
+    let note = super::broadcast_absent_note(super::TOOL_PREFIX);
+
+    assert!(
+        note.contains("desk_broadcast"),
+        "it has to name the verb the brief names, prefixed the way the belt would carry it, \
+         or the seat cannot tell which sentence is being corrected: {note}"
+    );
+    assert!(
+        note.contains("desk_ask"),
+        "and the verb it does have -- naming a tool a seat cannot see is the defect this \
+         exists to fix, from the other side: {note}"
+    );
+    assert!(
+        !note.contains("with `ask`"),
+        "never the bare name: the belt carries `desk_ask`: {note}"
+    );
+}
+
 #[test]
 fn a_seat_is_named_by_its_roster_name_then_its_role() {
     let mut record = crate::hive::test_support::record(
