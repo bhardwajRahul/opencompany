@@ -315,3 +315,36 @@ async fn a_takeovers_job_is_a_row_in_the_claimers_line_and_the_episode_opens_at_
         "it roots the line rather than hanging off it"
     );
 }
+
+/// The episode opens *at* the job and hangs *off* the claim.
+///
+/// Two different questions that one field was answering. `seq` is what the
+/// seat is briefed from and what its assignment is; `parent` is where a
+/// reader finds the conversation. Rooting on the job row put every utterance
+/// under a `SYSTEM_AUTHOR` row, which the console draws as a pill with no
+/// "N replies" -- so a live run journaled the claimer's whole report to the
+/// operator and showed them a claim, a grey line, and "Episode complete".
+#[test]
+fn a_carried_on_episode_is_assigned_at_the_job_and_threaded_on_the_claim() {
+    let claim_at = EventSeq::new(39);
+    let job_at = EventSeq::new(54);
+
+    let trigger = trigger_for(Some(job_at), "Carry it out.", Some(claim_at), &[]);
+
+    assert_eq!(
+        trigger.seq, job_at,
+        "the assignment is the job, so that is what the brief reads from"
+    );
+    assert_eq!(
+        trigger.parent,
+        Some(claim_at),
+        "and the thread roots on the claim, a message a reader can actually open"
+    );
+    // Derived exactly as `run_desk_message` derives it, so the two cannot
+    // drift back into a root nobody can see.
+    assert_eq!(
+        trigger.parent.unwrap_or(trigger.seq),
+        claim_at,
+        "the root is the claim, never the job row"
+    );
+}

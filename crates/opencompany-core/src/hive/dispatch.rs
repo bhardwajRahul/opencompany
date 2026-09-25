@@ -318,7 +318,27 @@ async fn carry_on_takeovers(dispatcher: &Arc<HiveDispatcher>) {
                 crate::ports::types::EventSeq::new(claim.at)
             }
         };
-        let trigger = trigger_for(Some(opened_at), &opening, None, &[]);
+        // **Opened at the job, rooted on the claim.**
+        //
+        // `run_desk_message` takes the thread root from `parent`, falling back
+        // to `seq` -- so opening at the job row alone made that row the root,
+        // and every utterance of the episode hung off it. The console renders
+        // a `SYSTEM_AUTHOR` row as a pill rather than a message, and a pill
+        // carries no "N replies", so the claimer's own report to the operator
+        // -- the `complete_episode` row, the point of the whole episode --
+        // was journaled and unreachable. A live run ended with the operator
+        // seeing a claim, a grey line, and "Episode complete - 3 rounds".
+        //
+        // The two answers are genuinely different questions. `seq` is what
+        // the seat is briefed from and what its assignment is; `parent` is
+        // where the conversation hangs for a reader. The job is the first and
+        // the claim is the second.
+        let trigger = trigger_for(
+            Some(opened_at),
+            &opening,
+            Some(crate::ports::types::EventSeq::new(claim.at)),
+            &[],
+        );
         tracing::info!(
             seat = %claim.seat,
             chat = %claim.chat,
