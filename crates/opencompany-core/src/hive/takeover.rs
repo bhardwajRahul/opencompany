@@ -83,14 +83,16 @@ impl Tool for TakeOverTool {
     }
 
     fn description(&self) -> &str {
-        "Take this work on yourself, instead of answering and handing it back. Concludes your \
-         conversation with whoever asked you — so they stop waiting and can finish — and tells \
-         the operator, in your own line with them, that you have it. Use it when the answer is \
-         'I will do this', not when the answer is the answer: a teammate that asked for an \
-         estimate wants the estimate, and `complete_episode` is how it gets one. After this, the \
-         operator discusses the work with you, not with them. Say in `message` what you are \
-         taking on, in plain words — it is read by a person, and it is the last thing the \
-         teammate that asked you hears."
+        "Take this work on yourself. Concludes your conversation with whoever asked you — so \
+         they stop waiting and can finish — and tells the operator, in your own line with them, \
+         that you have it. Use it whenever you are becoming the owner, INCLUDING when 'I will \
+         own it' is itself the answer you were asked for: this is the only way the operator \
+         hears it. Saying so in your reply does not reach them, and neither does asking the \
+         teammate who asked you to pass it on. Not for an answer you are handing back — a \
+         teammate that asked for an estimate wants the estimate, and `complete_episode` is how \
+         it gets one. After this, the operator discusses the work with you, not with them. Say \
+         in `message` what you are taking on, in plain words — it is read by a person, and it \
+         is the last thing the teammate that asked you hears."
     }
 
     fn parameters_schema(&self) -> serde_json::Value {
@@ -215,10 +217,12 @@ pub fn tool_for(loan: &crate::hive::seating::SeatLoan, prefix: &str) -> Option<B
 #[must_use]
 pub fn guest_persona_note(prefix: &str) -> String {
     format!(
-        "\n\nIf the right answer is that you will do the work yourself rather than hand back an \
-         answer, say so with `{prefix}{TAKE_OVER_TOOL}`: it ends this conversation for the \
-         teammate that asked you and tells the operator, in your own line with them, that you \
-         have it."
+        "\n\nIf you are taking this work on -- if the answer is that you will own it -- say so \
+         with `{prefix}{TAKE_OVER_TOOL}`: it ends this conversation for the teammate that asked \
+         you and tells the operator, in your own line with them, that you have it.\n\nThat tool \
+         is the only way to reach the operator from here. Answering that you will own it does \
+         not tell them, and neither does asking whoever asked you to pass it on -- they are \
+         finishing their own conversation, not yours, and the operator never hears it."
     )
 }
 

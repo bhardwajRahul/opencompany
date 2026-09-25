@@ -201,3 +201,48 @@ fn the_guest_note_names_the_prefixed_tool() {
         "and never the bare one, which is on no belt: {note}"
     );
 }
+
+/// The note fires on **owning the work**, not on the shape of the reply.
+///
+/// Two live runs watched a guest hold the verb, be told its name, and not
+/// reach for it. The second said the quiet part out loud -- "Yes, I'll own the
+/// pricing launch campaign end to end. ... Tell the operator I've got it." --
+/// and the operator's own line stayed empty.
+///
+/// The old wording triggered on "rather than hand back an answer", and from
+/// that seat it *was* handing back an answer: it had been asked who should own
+/// the work and answered that it would. So the one case the tool exists for
+/// read as the case the note excluded. It now keys on becoming the owner,
+/// however the sentence is shaped.
+#[test]
+fn the_note_fires_on_owning_the_work_not_on_refusing_to_answer() {
+    let note = guest_persona_note("desk_");
+    assert!(
+        note.contains("own it"),
+        "the trigger is ownership, which is what the seat knows about itself: {note}"
+    );
+    assert!(
+        !note.contains("rather than hand back an answer"),
+        "and not the shape of the reply, which excluded the very case it is for: {note}"
+    );
+}
+
+/// And it closes the route the guest actually took instead.
+///
+/// Asked to own the campaign, the guest replied "Tell the operator I've got
+/// it" -- delegating the announcement to the teammate that asked it, who
+/// cannot make it: that teammate is finishing its own conversation, and the
+/// operator never hears a word. A note that names the verb without closing
+/// that door leaves the seat a plausible wrong move.
+#[test]
+fn the_note_says_no_one_else_can_tell_the_operator() {
+    let note = guest_persona_note("desk_");
+    assert!(
+        note.contains("only way to reach the operator"),
+        "the verb is the sole route, said plainly: {note}"
+    );
+    assert!(
+        note.contains("pass it on"),
+        "and relaying through the asker is named and refused: {note}"
+    );
+}
