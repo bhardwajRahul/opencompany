@@ -499,6 +499,10 @@ pub struct HarnessDeps {
     /// cheap-shared-handle pattern as [`Self::delegations`]; the default is an
     /// empty queue, which simply means nothing is ever parked.
     pub approval_requests: ApprovalRequestQueue,
+    /// Where a guest seat stages a takeover, and the dispatcher drains it once
+    /// the episode that produced it has ended. Same cheap-shared-handle shape
+    /// as the queues above; an empty default simply means nothing is claimed.
+    pub takeovers: crate::hive::takeover::TakeoverQueue,
     /// The runtime's shared park transaction, for a turn that parks outside a
     /// cycle. `None` where no runtime is wired (tests, examples).
     pub approval_parker: Option<crate::runtime::approval_park::ApprovalParker>,
@@ -6222,6 +6226,7 @@ pub(crate) fn workflow_wiring_deps(
     plan: Option<capability_budget::CapabilityPlan>,
 ) -> HarnessDeps {
     HarnessDeps {
+        takeovers: Default::default(),
         emergency_gate: None,
         provider: Arc::new(provider::MockProvider::default()),
         provider_slug: "mock".to_string(),

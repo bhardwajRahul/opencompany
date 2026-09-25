@@ -31,6 +31,65 @@ use tinytools::{Tool, ToolResult};
 
 use crate::hive::seating::TakeoverLoan;
 
+/// One guest seat's claim, staged for the episode to act on once it ends.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TakeoverClaim {
+    /// The teammate that took the work on. Its own operator line is where the
+    /// work carries on.
+    pub seat: String,
+    /// The chat the announcement landed in -- `dm:<seat>`.
+    pub chat: String,
+    /// The announcement's sequence, which the follow-on episode opens from so
+    /// its first row is the claim the operator can already see.
+    pub at: u64,
+    /// What it said it was taking on, in its own words -- the opening the
+    /// claimer's line carries on from.
+    pub saying: String,
+}
+
+/// Claims staged by the seats of one episode.
+///
+/// # Why a queue and not the tool doing it
+///
+/// Because a seat cannot start an episode and must not start this one. The
+/// claimer is a *live seat inside the asker's episode* when it calls the verb:
+/// opening its own line there would put the same teammate in two turns at
+/// once. And the tool holds `events`, `company` and `agent` -- no hive map, no
+/// pool -- so it could not dispatch even if that were safe.
+///
+/// So the claim is staged, the asker's episode finishes (which is correct: the
+/// takeover *concluded* that conversation), and the dispatcher -- which does
+/// hold the hives and the pool -- opens the claimer's line afterwards. One
+/// conversation ends, another begins, in that order.
+#[derive(Clone, Debug, Default)]
+pub struct TakeoverQueue {
+    claims: std::sync::Arc<std::sync::Mutex<Vec<TakeoverClaim>>>,
+}
+
+impl TakeoverQueue {
+    /// Stages one claim.
+    pub fn stage(&self, claim: TakeoverClaim) {
+        self.claims
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(claim);
+    }
+
+    /// Takes everything staged, leaving the queue empty.
+    ///
+    /// Draining rather than reading: a claim acted on twice would open the
+    /// same line twice, and this queue is shared for the life of the process.
+    #[must_use]
+    pub fn drain(&self) -> Vec<TakeoverClaim> {
+        std::mem::take(
+            &mut *self
+                .claims
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        )
+    }
+}
+
 /// The bare name, before the episode's tool prefix.
 pub const TAKE_OVER_TOOL: &str = "take_over";
 
@@ -160,10 +219,31 @@ impl Tool for TakeOverTool {
         // the operator was not told, and saying so is now the seat's problem
         // rather than something it can fix with another call.
         Ok(match chat {
-            Ok((chat, _seq)) => ToolResult::success(format!(
-                "recorded: you have this work, and the operator has been told in `{chat}`. Your \
-                 turn is complete; say nothing else."
-            )),
+            Ok((chat, seq)) => {
+                // **And the work carries on in that line.**
+                //
+                // Announcing alone left the claim a dead end: the operator was
+                // told a teammate owned the campaign, and nothing ran. A live
+                // run watched exactly that -- "I'm owning the pricing launch
+                // campaign end to end" -- followed by silence, no episode, and
+                // a line the operator had to prod to restart.
+                //
+                // Staged rather than opened here: this seat is still mid-turn
+                // inside the asker's episode, and opening its own line now
+                // would run the same teammate twice at once. The episode acts
+                // on it once it ends.
+                self.loan.queue.stage(TakeoverClaim {
+                    seat: self.loan.agent.clone(),
+                    chat: chat.clone(),
+                    at: seq.value(),
+                    saying: message.clone(),
+                });
+                ToolResult::success(format!(
+                    "recorded: you have this work, and the operator has been told in `{chat}`. \
+                     Carry on there -- this conversation is closed. Your turn is complete; say \
+                     nothing else."
+                ))
+            }
             Err(error) => ToolResult::success(format!(
                 "recorded: you have this work and whoever asked you is no longer waiting. The \
                  operator could NOT be told ({error}) — do not retry, and do not assume they \

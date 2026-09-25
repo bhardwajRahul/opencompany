@@ -40,6 +40,10 @@ pub struct TakeoverLoan {
     pub company: CompanyId,
     /// The seat claiming the work — whose line the announcement lands in.
     pub agent: String,
+    /// Where a claim is staged for the episode to act on once it ends. See
+    /// [`TakeoverQueue`](crate::hive::takeover::TakeoverQueue) for why the
+    /// tool cannot open the claimer's line itself.
+    pub queue: crate::hive::takeover::TakeoverQueue,
 }
 
 impl std::fmt::Debug for TakeoverLoan {

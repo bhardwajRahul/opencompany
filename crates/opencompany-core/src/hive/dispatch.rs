@@ -226,15 +226,64 @@ pub fn spawn_episode(
 ) -> tokio::task::JoinHandle<Option<EpisodeReport>> {
     let task: std::pin::Pin<Box<dyn std::future::Future<Output = Option<EpisodeReport>> + Send>> =
         Box::pin(async move {
-            match dispatcher.run_desk_message(&desk_id, trigger).await {
+            let outcome = match dispatcher.run_desk_message(&desk_id, trigger).await {
                 Ok(report) => Some(report),
                 Err(error) => {
                     tracing::warn!(desk = %desk_id, %error, "[hive] the episode failed");
                     None
                 }
-            }
+            };
+            // **A claimed handover carries on in the claimer's own line.**
+            //
+            // Drained here, after the episode this claim came out of has
+            // ended, and deliberately not before: the claimer was a seat
+            // *inside* that episode, so opening its line any earlier would run
+            // the same teammate in two turns at once. `take_over` already
+            // concluded the asker's conversation -- that episode finishing is
+            // the handover's first half, and this is its second.
+            //
+            // Failures are logged and dropped rather than failing the episode
+            // that just succeeded: the conversation really did transfer and
+            // the operator really was told, so the recoverable state is a line
+            // that needs one more message, not a run to unwind.
+            carry_on_takeovers(&dispatcher).await;
+            outcome
         });
     tokio::spawn(task)
+}
+
+/// Opens the claimer's own line for every takeover staged during an episode.
+///
+/// One episode ends and another begins, which is what a handover is: the
+/// asker's conversation was concluded by the verb itself, and the work now
+/// belongs to a teammate the operator talks to directly.
+async fn carry_on_takeovers(dispatcher: &Arc<HiveDispatcher>) {
+    for claim in dispatcher.deps.takeovers.drain() {
+        let desk_id = format!("{}{}", crate::runtime::assignee::DM_PREFIX, claim.seat);
+        if !dispatcher.hives.contains_key(&desk_id) {
+            // DM episodes are off, or this teammate has no hive. The operator
+            // still has the announcement; what they do not get is a room.
+            tracing::warn!(
+                seat = %claim.seat,
+                chat = %claim.chat,
+                "[hive] a takeover was announced but its line runs no episodes, so nothing \
+                 carries it on"
+            );
+            continue;
+        }
+        let trigger = trigger_for(
+            Some(crate::ports::types::EventSeq::new(claim.at)),
+            &claim.saying,
+            None,
+            &[],
+        );
+        tracing::info!(
+            seat = %claim.seat,
+            chat = %claim.chat,
+            "[hive] a takeover carries on in the claimer's own line"
+        );
+        spawn_episode(Arc::clone(dispatcher), desk_id, trigger);
+    }
 }
 
 /// Carries on a parked episode from its checkpoint on its own task, as

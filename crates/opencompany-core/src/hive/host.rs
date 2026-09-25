@@ -973,6 +973,11 @@ impl EpisodeHost for DeskHost {
                 events: Arc::clone(&self.events),
                 company: self.company.clone(),
                 agent: seat.to_owned(),
+                queue: self
+                    .roster
+                    .as_ref()
+                    .map(|(_, deps)| deps.takeovers.clone())
+                    .unwrap_or_default(),
             }
         });
         let guest = takeover.is_some();

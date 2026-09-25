@@ -45,18 +45,33 @@ fn wrapped(
     Arc<MemoryLog>,
     Arc<Mutex<Vec<serde_json::Value>>>,
 ) {
+    let (tool, log, seen, _queue) = wrapped_with_queue(outcome);
+    (tool, log, seen)
+}
+
+/// [`wrapped`], keeping the queue the claim is staged onto.
+fn wrapped_with_queue(
+    outcome: impl Fn() -> ToolResult + Send + Sync + 'static,
+) -> (
+    TakeOverTool,
+    Arc<MemoryLog>,
+    Arc<Mutex<Vec<serde_json::Value>>>,
+    crate::hive::takeover::TakeoverQueue,
+) {
     let log = Arc::new(MemoryLog::default());
     let seen = Arc::new(Mutex::new(Vec::new()));
     let complete = Box::new(FakeComplete {
         outcome: Box::new(outcome),
         seen: Arc::clone(&seen),
     }) as Box<dyn Tool>;
+    let queue = crate::hive::takeover::TakeoverQueue::default();
     let loan = TakeoverLoan {
         events: Arc::clone(&log) as Arc<dyn EventLog>,
         company: record(TWO_DESKS).id,
         agent: "engineer".into(),
+        queue: queue.clone(),
     };
-    (TakeOverTool::new(complete, loan, "desk_"), log, seen)
+    (TakeOverTool::new(complete, loan, "desk_"), log, seen, queue)
 }
 
 fn args() -> serde_json::Value {
@@ -244,5 +259,58 @@ fn the_note_says_no_one_else_can_tell_the_operator() {
     assert!(
         note.contains("pass it on"),
         "and relaying through the asker is named and refused: {note}"
+    );
+}
+
+/// A claim is staged, so the work carries on in the claimer's own line.
+///
+/// Announcing alone left the handover a dead end: a live run watched a guest
+/// say "I'm owning the pricing launch campaign end to end" and then stop --
+/// no episode, no room, a line the operator had to prod to restart. The claim
+/// is what the dispatcher opens that line from once the asker's episode ends.
+///
+/// Staged rather than opened here because the claimer is still a seat inside
+/// that episode: opening its own line mid-turn would run one teammate twice.
+#[tokio::test]
+async fn a_claim_is_staged_for_the_claimers_own_line() {
+    let (tool, log, _seen, queue) =
+        wrapped_with_queue(|| ToolResult::success("recorded: your assignment is complete"));
+
+    let result = tool.execute(args()).await.expect("the call runs");
+    assert!(!result.is_error, "{}", text(&result));
+
+    let staged = queue.drain();
+    assert_eq!(staged.len(), 1, "one claim, for one takeover: {staged:?}");
+    assert_eq!(staged[0].seat, "engineer", "the teammate that took it on");
+    assert_eq!(
+        staged[0].chat, "dm:engineer",
+        "and its own line with the operator, which is where the work carries on"
+    );
+    assert!(
+        staged[0].saying.contains("webauthn"),
+        "carrying what it said, so the line opens on the claim: {staged:?}"
+    );
+    assert!(
+        log.replies("dm:engineer").len() == 1,
+        "the announcement still lands; staging is in addition to it, not instead"
+    );
+}
+
+/// A refused conclusion stages nothing, for the same reason it announces
+/// nothing: the room never transferred the work.
+#[tokio::test]
+async fn a_refused_conclusion_stages_no_claim() {
+    let (tool, _log, _seen, queue) = wrapped_with_queue(|| {
+        let mut refused = ToolResult::success("name exactly those");
+        refused.is_error = true;
+        refused
+    });
+
+    let refused = tool.execute(args()).await.expect("the call runs");
+
+    assert!(refused.is_error);
+    assert!(
+        queue.drain().is_empty(),
+        "nothing was claimed, so no line is opened"
     );
 }
